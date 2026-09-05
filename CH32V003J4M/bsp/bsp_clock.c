@@ -6,8 +6,8 @@
 /// @return void
 void bsp_per_clock_init(void)
 {
-    /* 使能 GPIOA、GPIOC、GPIOD 时钟 */
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOD, ENABLE);
+    /* 使能 GPIOA、GPIOC 时钟 */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOC, ENABLE);
 
     /* 使能 TIM1 时钟 */
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);

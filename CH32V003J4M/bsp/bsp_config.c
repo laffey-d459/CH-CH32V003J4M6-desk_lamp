@@ -4,15 +4,16 @@
 /// @brief  板级初始化
 /// @param  void
 /// @return void
-void board_init (void) 
+void board_init(void)
 {
-    NVIC_PriorityGroupConfig (NVIC_PriorityGroup_1);
+    NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);
     SystemCoreClockUpdate();
     Delay_Init();
-    
+
     bsp_per_clock_init();
 
-    bsp_gpio_init();
+    bsp_gpio_t1c2_init();
 
-    bsp_tim1_ch4_pwm_init();
+    bsp_tim1_ch2_pwm_init();
+
 }

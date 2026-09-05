@@ -3,6 +3,6 @@
 
 #include "ch32v00x.h"
 
-void bsp_gpio_init(void);
+void bsp_gpio_t1c2_init(void);
 
 #endif
