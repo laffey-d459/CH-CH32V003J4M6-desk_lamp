@@ -6,7 +6,7 @@
  * Description        : Main program body.
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
- * Attention: This software (modified or not) and binary are used for 
+ * Attention: This software (modified or not) and binary are used for
  * microcontroller manufactured by Nanjing Qinheng Microelectronics.
  *******************************************************************************/
 
@@ -19,6 +19,7 @@
  */
 
 #include "bsp_config.h"
+#include "task_sensor.h"
 
 /* Global typedef */
 
@@ -37,7 +38,10 @@ int main(void)
 {
     board_init();
 
-    while(1)
+    task_sensor_init();
+
+    while (1)
     {
+        task_sensor();
     }
 }

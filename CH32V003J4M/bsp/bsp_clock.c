@@ -9,6 +9,12 @@ void bsp_per_clock_init(void)
     /* 使能 GPIOA、GPIOC 时钟 */
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOC, ENABLE);
 
+    /* 使能 AFIO 时钟 (访问 AFIO 寄存器必须) */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+
     /* 使能 TIM1 时钟 */
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
+
+    /* 使能 TIM2 时钟 */
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
 }
