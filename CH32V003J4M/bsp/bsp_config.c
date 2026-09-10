@@ -1,5 +1,4 @@
 #include "bsp_config.h"
-#include "debug.h"
 
 /// @brief  板级初始化
 /// @param  void
@@ -16,9 +15,9 @@ void board_init(void)
 
     bsp_per_clock_init();
 
-    bsp_gpio_t1c2_init();
+    bsp_gpio_t1c4_init();
     bsp_gpio_touch_init();
 
-    bsp_tim1_ch2_pwm_init();
+    bsp_tim1_ch4_pwm_init();
     bsp_tim2_ch2_ic_init();
 }

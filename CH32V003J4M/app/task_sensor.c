@@ -31,7 +31,7 @@ void task_sensor(void)
     if (is_touching == 1 && last_touching == 0)
     {
         is_en_led = !is_en_led;
-        bsp_tim1_ch2_set_duty(is_en_led ? 111 : 0);
+        bsp_tim1_ch4_set_duty(is_en_led ? 111 : 0);
     }
     last_touching = is_touching;
 }
