@@ -10,9 +10,10 @@
  * microcontroller manufactured by Nanjing Qinheng Microelectronics.
  *******************************************************************************/
 #include <ch32v00x_it.h>
+
 #include "touch.h"
 
-extern touch_t touch_0;
+extern touch_struct_t touch_0;
 
 void NMI_Handler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void NMI_Handler(void)
@@ -34,10 +35,10 @@ void HardFault_Handler(void)
 void TIM2_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void TIM2_IRQHandler(void)
 {
-  if (TIM_GetITStatus(TIM2, TIM_IT_CC2) == 1)
+  if (TIM_GetITStatus(TIM2, TIM_IT_Update) == SET)
   {
-    TIM_ClearITPendingBit(TIM2, TIM_IT_CC2);
+    TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
 
-    touch_measure_callback(&touch_0);
+    touch_time_callback(&touch_0);
   }
 }

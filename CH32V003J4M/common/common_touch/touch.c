@@ -1,158 +1,151 @@
+/********************************************************************************************
+ * file description: 触摸按键状态扫描
+ *                   方案：定时器输出pwm通过电阻后给触摸节点，触摸节点再直连adc接口。
+ *                         pwm推荐配置PWM1、有效电平为高电平
+ *
+ * Version: V1.0.0
+ * Copyright (c) 2026, laffey-d459.
+ * Licensed under the MIT License.
+ *
+ * Modify Record:
+ * 2026/09/16  laffey-d459  V1.0.0  初始版本
+ ********************************************************************************************/
 #include "touch.h"
-#include <string.h>
+#include <stdlib.h>
 
-#define _TOUCH_SAMPLE_NUM (10)
-#define _TOUCH_DISCARD_NUM (4)
+#define __TOUCH_CLAMP(x, lo, hi) ((x) < (lo) ? (lo) : ((x) > (hi) ? (hi) : (x)))
+#define __TOUCH_1IIR_CLT(K_IIR1, CURR, LAST) (((K_IIR1 * CURR) + ((1024 - K_IIR1) * LAST)) >> 10)
 
-/// @brief 单次测量timcvr
+/// @brief 触摸基线校准用的pi计算
 /// @param htouch 触摸句柄
-/// @param out_cvr 输出值
-/// @retval TOUCH_OK 初始化完成
-/// @retval TOUCH_BUSY 已有项目正在测量
-/// @retval TOUCH_TIMEOUT 测量超时
-static TOUCH_STATE_T _measure_once(touch_t *htouch, uint32_t *out_cvr)
+/// @param error 误差，等于当前值-基线
+/// @return void
+static inline void __touch_pi_calculate(touch_struct_t *htouch, int32_t error)
 {
-    if (htouch->is_measuring == 1)
+    if (error == 0)
     {
-        return TOUCH_BUSY;
+        htouch->pi_integral = 0;
+        return;
     }
 
-    htouch->is_measuring = 1;
-    htouch->conf_tim_sr(1);
-    htouch->conf_pin(1);
-    for (volatile uint32_t i = 0; i <= 0xFFFFF && htouch->is_measuring == 1; ++i)
-    {
-        ;
-    }
-    htouch->conf_tim_sr(0);
-    htouch->conf_pin(0);
-
-    if (htouch->is_measuring == 1)
-    {
-        htouch->is_measuring = 0;
-        return TOUCH_TIMEOUT;
-    }
-
-    *out_cvr = htouch->get_tim_cvr(0);
-    htouch->is_measuring = 0;
-    return TOUCH_OK;
-}
-
-/// @brief 去除极值后的平均值滤波
-/// @param htouch 触摸句柄
-/// @return 滤波值
-static uint32_t _measure_filtered(touch_t *htouch)
-{
-    uint32_t samples[_TOUCH_SAMPLE_NUM];
-    uint32_t ok_cnt = 0;
-
-    for (uint32_t i = 0; i < _TOUCH_SAMPLE_NUM; ++i)
-    {
-        if (_measure_once(htouch, &samples[ok_cnt]) == TOUCH_OK)
-        {
-            ok_cnt++;
-        }
-    }
-
-    if (ok_cnt <= _TOUCH_DISCARD_NUM * 2)
-    {
-        return 0;
-    }
-
-    for (uint32_t i = 0; i < ok_cnt - 1; ++i)
-    {
-        for (uint32_t j = 0; j < ok_cnt - 1 - i; ++j)
-        {
-            if (samples[j] > samples[j + 1])
-            {
-                uint32_t tmp = samples[j];
-                samples[j] = samples[j + 1];
-                samples[j + 1] = tmp;
-            }
-        }
-    }
-
-    uint32_t sum = 0;
-    for (uint32_t i = _TOUCH_DISCARD_NUM; i < ok_cnt - _TOUCH_DISCARD_NUM; ++i)
-    {
-        sum += samples[i];
-    }
-    return sum / (ok_cnt - _TOUCH_DISCARD_NUM * 2);
+    int32_t ib = htouch->pi_integral;
+    ib = __TOUCH_CLAMP(ib + error, htouch->pi_integral_min, htouch->pi_integral_max);
+    htouch->pi_integral = ib;
+    htouch->baseline += error / htouch->pi_kp + ib / htouch->pi_ki;
 }
 
 /// @brief 触摸初始化
 /// @param htouch 触摸句柄
-/// @param touch_initstruch 触摸初始化结构体
+/// @param touch_initstruct 触摸初始化结构体
 /// @retval TOUCH_OK 初始化完成
 /// @retval TOUCH_INVAL_VALUE 无效参数
-/// @note 务必先开启捕获中断
-TOUCH_STATE_T touch_init(touch_t *htouch, touch_init_t *touch_initstruch)
+/// @note 初始化后baseline和curr_value会在定时器回调中一起更新
+TOUCH_STATE_T touch_init(touch_struct_t *htouch, touch_init_t *touch_initstruct)
 {
-    if (htouch == 0 || touch_initstruch == 0 ||
-        touch_initstruch->conf_pin == 0 || touch_initstruch->conf_tim_sr == 0 ||
-        touch_initstruch->get_tim_cvr == 0)
+    if (htouch == 0 || touch_initstruct == 0 || touch_initstruct->get_adc_value == 0)
     {
         return TOUCH_INVAL_VALUE;
     }
 
-    htouch->is_measuring = 0;
-    htouch->baseline = 0;
+    htouch->handle_state = HTOUCH_NO_INIT;
 
-    htouch->conf_tim_sr = touch_initstruch->conf_tim_sr;
-    htouch->get_tim_cvr = touch_initstruch->get_tim_cvr;
-    htouch->conf_pin = touch_initstruch->conf_pin;
-    htouch->d_threa = touch_initstruch->d_threa;
+    htouch->d_threa = touch_initstruct->d_threa;
 
-    htouch->conf_tim_sr(0);
-    htouch->conf_pin(0);
+    htouch->k_1iir = touch_initstruct->k_1iir;
 
-    htouch->baseline = _measure_filtered(htouch);
+    htouch->pi_kp = touch_initstruct->pi_kp;
+    htouch->pi_ki = touch_initstruct->pi_ki;
+    htouch->pi_integral_max = touch_initstruct->pi_integral_max;
+    htouch->pi_integral_min = touch_initstruct->pi_integral_min;
+    htouch->pi_integral = 0;
+
+    htouch->is_touching = 0;
+    htouch->curr_value = 0;
+    htouch->t_value = 0;
+    htouch->check_counts = 0;
+    htouch->baseline = 0xFFFF;
+
+    htouch->get_adc_value = touch_initstruct->get_adc_value;
+
+    htouch->handle_state = HTOUCH_INITING;
 
     return TOUCH_OK;
 }
 
-/// @brief 测量是否发生触摸事件
+/// @brief 获取当前触摸状态
 /// @param htouch 触摸句柄
-/// @param is_touching 是否发生触摸事件（0非，1是）
-/// @retval TOUCH_OK 测量成功
+/// @param is_touching 输出触摸状态（0：未触摸，1：触摸）
+/// @retval TOUCH_OK 正常
 /// @retval TOUCH_INVAL_VALUE 无效参数
-/// @note 正常情况测量时间估算：大于TOUCH_SAMPLE_NUM*(conf_pin()里的引脚延时间)
-TOUCH_STATE_T touch_measure_touching(touch_t *htouch, uint8_t *is_touching)
+TOUCH_STATE_T touch_get_touch_state(touch_struct_t *htouch, uint8_t *is_touching)
 {
-    if (htouch == 0 || is_touching == 0 ||
-        htouch->conf_pin == 0 || htouch->conf_tim_sr == 0)
+    if (htouch == 0 || is_touching == 0)
+    {
+        if (is_touching != 0)
+        {
+            *is_touching = 0;
+        }
+        return TOUCH_INVAL_VALUE;
+    }
+
+    *is_touching = htouch->is_touching;
+
+    return TOUCH_OK;
+}
+
+/// @brief 输出pwm的定时器的回调函数
+/// @param htouch 触摸句柄
+/// @retval TOUCH_OK 正常
+/// @retval TOUCH_INVAL_VALUE 无效参数
+/// @retval TOUCH_HANDLE_UNUSABLE 句柄不可用
+/// @retval TOUCH_IS_BUSY 正在测量
+/// @note 放到输出pwm给触摸节点的定时器的更新中断服务函数里
+TOUCH_STATE_T touch_time_callback(touch_struct_t *htouch)
+{
+    if (htouch == 0 || htouch->get_adc_value == 0)
     {
         return TOUCH_INVAL_VALUE;
     }
 
-    uint32_t avg = _measure_filtered(htouch);
-
-    if (avg > htouch->baseline && (avg - htouch->baseline) > htouch->d_threa)
+    if (htouch->handle_state == HTOUCH_NO_INIT)
     {
-        *is_touching = 1;
+        return TOUCH_HANDLE_UNUSABLE;
+    }
+
+    if (++(htouch->check_counts) < 10)
+    {
+        htouch->t_value += htouch->get_adc_value();
+        return TOUCH_IS_BUSY;
+    }
+    htouch->check_counts = 0;
+    htouch->t_value /= 10;
+
+    int32_t t_curr_value = htouch->curr_value;
+    t_curr_value = __TOUCH_1IIR_CLT(htouch->k_1iir, htouch->t_value, t_curr_value);
+    htouch->curr_value = t_curr_value;
+
+    int32_t t_d = t_curr_value - htouch->baseline;
+    if (htouch->handle_state == HTOUCH_INITING && t_d == 0)
+    {
+        if (++htouch->init_counts > 10)
+        {
+            htouch->handle_state = HTOUCH_OK;
+        }
+        return TOUCH_OK;
+    }
+    if (htouch->handle_state != HTOUCH_OK)
+    {
+        htouch->init_counts = 0;
     }
     else
     {
-        *is_touching = 0;
-        htouch->baseline = (htouch->baseline * 7 + avg) / 8;
+        htouch->is_touching = (abs(t_d) > (int32_t)htouch->d_threa) ? 1 : 0;
     }
 
-    return TOUCH_OK;
-}
-
-/// @brief 触摸测量事件回调函数
-/// @param htouch 触摸句柄
-/// @retval TOUCH_OK 回调成功
-/// @retval TOUCH_INVAL_VALUE 无效参数
-/// @note 需要放到捕获中断中
-TOUCH_STATE_T touch_measure_callback(touch_t *htouch)
-{
-    if (htouch == 0)
+    if (htouch->is_touching == 0)
     {
-        return TOUCH_INVAL_VALUE;
+        __touch_pi_calculate(htouch, t_d);
     }
-
-    htouch->is_measuring = 0;
 
     return TOUCH_OK;
 }
