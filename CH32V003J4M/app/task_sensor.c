@@ -3,6 +3,8 @@
 #include "touch.h"
 #include "key.h"
 
+#define TASK_LED_LIGHT_STEP (5)
+
 touch_struct_t touch_0 = {0};
 key_struct_t key_0 = {0};
 
@@ -40,7 +42,7 @@ void task_sensor_init(void)
     touch_init(&touch_0, &touch_initstruct);
 
     key_init_t key_initstruct = {
-        .time_double = 0,
+        .time_double = 20,
         .time_long = 300,
         .time_repeat = 20,
 
@@ -56,14 +58,13 @@ void task_sensor(void)
 {
     static uint8_t led_light_index = 0;
     static int32_t led_light = 0;
-    static int8_t led_light_step = 5;
+    static int8_t led_light_step = TASK_LED_LIGHT_STEP;
     static uint8_t was_long = 0;
 
     key_scan(&key_0);
 
-    uint8_t is_single = 0, is_long = 0, is_repeat = 0, is_up = 0;
+    uint8_t is_single = 0, is_repeat = 0, is_up = 0;
     key_check_flag(&key_0, KEY_SINGLE, &is_single);
-    key_check_flag(&key_0, KEY_LONG, &is_long);
     key_check_flag(&key_0, KEY_REPEAT, &is_repeat);
     key_check_flag(&key_0, KEY_UP, &is_up);
     if (is_single)
@@ -72,36 +73,31 @@ void task_sensor(void)
         led_light = led_light_arr[led_light_index];
         if (led_light >= 960)
         {
-            led_light_step -= 5;
+            led_light_step = -TASK_LED_LIGHT_STEP;
         }
         else if (led_light <= 0)
         {
-            led_light_step += 5;
+            led_light_step = TASK_LED_LIGHT_STEP;
         }
     }
-    if (is_long || is_repeat)
+    if (is_repeat)
     {
         was_long = 1;
         led_light += led_light_step;
         if (led_light >= 960)
         {
             led_light = 960;
+            led_light_index = sizeof(led_light_arr) / sizeof(led_light_arr[0]) - 1;
         }
         else if (led_light <= 0)
         {
             led_light = 0;
+            led_light_index = 0;
         }
     }
     if (is_up && was_long)
     {
-        if (led_light >= 960)
-        {
-            led_light_step = -5;
-        }
-        else if (led_light <= 0)
-        {
-            led_light_step = 5;
-        }
+        led_light_step = -led_light_step;
         was_long = 0;
     }
     bsp_tim1_ch4_set_duty(led_light);
