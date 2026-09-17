@@ -40,7 +40,7 @@ void task_sensor_init(void)
     touch_init(&touch_0, &touch_initstruct);
 
     key_init_t key_initstruct = {
-        .time_double = 200,
+        .time_double = 0,
         .time_long = 300,
         .time_repeat = 20,
 
