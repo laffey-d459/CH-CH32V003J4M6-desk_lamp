@@ -12,6 +12,7 @@ void board_init(void)
 
     SystemCoreClockUpdate();
     Delay_Init();
+    Delay_Ms(1000);
 
     bsp_per_clock_init();
 
@@ -23,4 +24,6 @@ void board_init(void)
     bsp_tim2_ch2_pwm_init();
 
     bsp_adc_ch0_init();
+
+    USART_Printf_Init(115200);
 }

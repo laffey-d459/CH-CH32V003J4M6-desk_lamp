@@ -102,6 +102,18 @@ void task_sensor(void)
     }
     bsp_tim1_ch4_set_duty(led_light);
 
+    //////////////////////////////////////////////
+    uint32_t data = touch_0.curr_value;
+    uint32_t data1 = touch_0.baseline;
+    uint32_t data2 = touch_0.handle_state;
+    uint8_t buf[] = {0xAA, 0x55, (uint8_t)(data >> 8), (uint8_t)(data), (uint8_t)(data1 >> 8), (uint8_t)(data1), (uint8_t)(data2 >> 8), (uint8_t)(data2)};
+    for (int i = 0; i < sizeof(buf); i++)
+    {
+        while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET)
+            ;
+        USART_SendData(USART1, buf[i]);
+    }
+    //////////////////////////////////////////////
 
     Delay_Ms(1);
 }
